@@ -24,15 +24,34 @@ def get_current_data(holdings_df):
         return None
     
     tickers = holdings_df['ticker'].tolist()
-    # yfinance를 통한 실시간 가격 조회
-    data = yf.download(tickers, period="1d")['Close']
+    # 1. 데이터 가져오기 (시도가 실패할 경우를 대비해 기간을 5일로 넉넉히 잡음)
+    data = yf.download(tickers, period="5d", interval="1d")['Close']
     
+    # 2. 데이터가 완전히 비어있는지 체크
+    if data.empty:
+        st.error("⚠️ 주식 시세를 가져올 수 없습니다. 티커(종목코드)가 올바른지 확인해주세요.")
+        return None
+    
+    # 3. 마지막 유효한 가격(NaN이 아닌 마지막 값) 가져오기
     if len(tickers) == 1:
-        current_prices = {tickers[0]: data.iloc[-1]}
+        # 종목이 하나일 때
+        last_price = data.dropna().iloc[-1]
+        current_prices = {tickers[0]: last_price}
     else:
-        current_prices = data.iloc[-1].to_dict()
+        # 종목이 여러 개일 때
+        last_prices = data.ffill().iloc[-1] # ffill()로 빈칸을 채운 후 마지막 행 선택
+        current_prices = last_prices.to_dict()
     
+    # 4. 데이터 매핑
     holdings_df['current_price'] = holdings_df['ticker'].map(current_prices)
+    
+    # 가격을 못 가져온 종목이 있는지 체크
+    if holdings_df['current_price'].isnull().any():
+        bad_tickers = holdings_df[holdings_df['current_price'].isnull()]['ticker'].tolist()
+        st.warning(f"⚠️ 다음 종목의 시세를 찾을 수 없습니다: {', '.join(bad_tickers)}")
+        # 시세를 못 가져온 종목은 0원으로 처리하거나 계산에서 제외
+        holdings_df['current_price'] = holdings_df['current_price'].fillna(0)
+
     holdings_df['total_value'] = holdings_df['quantity'] * holdings_df['current_price']
     holdings_df['investment'] = holdings_df['quantity'] * holdings_df['avg_price']
     holdings_df['pnl'] = holdings_df['total_value'] - holdings_df['investment']
