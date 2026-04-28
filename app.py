@@ -131,7 +131,20 @@ def main():
         else:
             st.warning("시세를 불러올 수 없습니다. 티커 형식을 확인해 주세요.")
     else:
-        st.info("사이드바에서 종목을 추가해 주세요. (예: 삼성전자는 005930.KS)")
+        # 사이드바: 입력 및 삭제
+    st.sidebar.header("📥 데이터 관리")
+    
+    # key="stock_input_form" 처럼 고유한 이름을 명시적으로 지정합니다.
+    with st.sidebar.form(key="stock_input_form"):
+        ticker = st.text_input("종목명 (예: 005930.KS, TSLA)").upper().strip()
+        qty = st.number_input("보유 수량", min_value=0.0, step=1.0)
+        price = st.number_input("평균 취득 단가", min_value=0.0, step=100.0)
+        submit = st.form_submit_button("추가/수정")
+        
+        if submit and ticker:
+            conn.execute("INSERT OR REPLACE INTO holdings VALUES (?, ?, ?)", (ticker, qty, price))
+            conn.commit()
+            st.rerun()
 
     # 자산 변화 차트
     history_df = pd.read_sql("SELECT * FROM history ORDER BY date", conn)
